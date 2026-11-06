@@ -150,7 +150,9 @@ input[type=file]{display:none}
 <section role="tabpanel" id="synthetic">
   <div class="card">
     <h2>Synthetic clips <span class="badge">SYNTHETIC</span></h2>
-    <div class="note">All clips here are AI-generated with a text-to-video model (Wan2.1-T2V-1.3B, following the Step-Video-T2V idea). They show no real people. These clips were never used for training: they are a held-out stress test.</div>
+    <div class="note">All 36 clips are AI-generated with a text-to-video model (Wan2.1-T2V-1.3B, following the Step-Video-T2V idea) and show no real people. The model in this app was trained on real photos only, so it has never seen any of them. The tag shows how each clip was used in our experiments: <b>training</b> (27 clips, used to train the + synthetic model) or <b>held-out</b> (9 clips, the stress-test set).</div>
+    <div class="chips" id="cGest"></div>
+    <div class="chips" id="cSplit"></div>
     <div class="chips" id="cChips"></div>
     <div class="grid">
       <div class="stage" id="cStage">Choose a clip</div>
@@ -169,7 +171,7 @@ input[type=file]{display:none}
     <h2>Privacy, consent and synthetic media</h2>
     <p><b>Privacy.</b> The model runs in your browser with ONNX Runtime Web. Photos and webcam frames are processed on your device and are never uploaded or stored.</p>
     <p><b>Consent.</b> All people in our training photos are team members who agreed to be photographed for this course project.</p>
-    <p><b>Synthetic media.</b> Clips in the Synthetic clips tab are AI-generated and labelled SYNTHETIC on every frame.</p>
+    <p><b>Synthetic media.</b> The 36 clips in the Synthetic clips tab are AI-generated and labelled SYNTHETIC on every frame.</p>
     <p><b>Limitations.</b> Trained on 644 photos of three people's hands, mostly indoors. Accuracy drops for unusual poses, backlight and very low resolution (see the stress test). Not for safety-critical or surveillance use.</p>
   </div>
   <div class="card" style="margin-top:16px">
@@ -372,11 +374,28 @@ $("sFile").onchange = async e => { const f = e.target.files[0]; if (!f) return; 
 $("sUseLast").onclick = () => lastSource && stress(lastSource);
 
 /* ---------- Synthetic clips ---------- */
+let allClips = [], fGest = "all", fSplit = "all";
 async function loadClips() {
-  let clips = [];
-  try { clips = await (await fetch("examples/clips.json")).json(); } catch (e) {}
-  if (!clips.length) { $("cChips").innerHTML = '<span class="meta">No clips found in examples/.</span>'; return; }
-  $("cChips").innerHTML = clips.map(c => `<button class="chip" aria-pressed="false" data-f="${c}">${c.replace(".mp4", "").replaceAll("__", " · ")}</button>`).join("");
+  try { allClips = await (await fetch("examples/clips.json")).json(); } catch (e) {}
+  allClips = allClips.map(c => typeof c === "string" ? { file: c, split: "held-out" } : c);
+  if (!allClips.length) { $("cChips").innerHTML = '<span class="meta">No clips found in examples/.</span>'; return; }
+  const mk = (id, opts, cur, set) => {
+    $(id).innerHTML = opts.map(([v, t]) => `<button class="chip" aria-pressed="${v === cur}" data-v="${v}">${t}</button>`).join("");
+    $(id).querySelectorAll(".chip").forEach(ch => ch.onclick = () => {
+      $(id).querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", x === ch)); set(ch.dataset.v); renderClips();
+    });
+  };
+  const n = sp => allClips.filter(c => sp === "all" || c.split === sp).length;
+  mk("cGest", [["all", "All gestures"], ...CLASSES.map(c => [c, c])], fGest, v => fGest = v);
+  mk("cSplit", [["all", `All clips (${n("all")})`], ["held-out", `Held-out (${n("held-out")})`], ["training", `Training (${n("training")})`]], fSplit, v => fSplit = v);
+  renderClips();
+}
+function renderClips() {
+  const list = allClips.filter(c => (fGest === "all" || c.file.startsWith(fGest + "__")) && (fSplit === "all" || c.split === fSplit));
+  $("cChips").innerHTML = list.map(c => {
+    const [g, env, cam, idx] = c.file.replace(".mp4", "").split("__");
+    return `<button class="chip" aria-pressed="false" data-f="${c.file}" title="${c.split}">${g} · ${env.replace("_", " ")} · ${cam} <span style="color:var(--muted)">· ${c.split}</span></button>`;
+  }).join("") || '<span class="meta">No clips match the filters.</span>';
   $("cChips").querySelectorAll(".chip").forEach(ch => ch.onclick = () => {
     $("cChips").querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", x === ch)); clip(ch.dataset.f);
   });
@@ -397,7 +416,8 @@ async function clip(name) {
   $("cLabel").textContent = `Majority vote: ${CLASSES[maj]} (${counts[maj]}/${N} frames)`;
   $("cPlot").innerHTML = timeline(probs);
   const acc = truth >= 0 ? votes.filter(x => x === truth).length / N : null;
-  $("cMeta").innerHTML = (truth >= 0 ? `<b>Prompted gesture:</b> ${CLASSES[truth]} · per-frame accuracy ${(acc * 100).toFixed(0)}%<br>` : "") +
+  const split = (allClips.find(c => c.file === name) || {}).split;
+  $("cMeta").innerHTML = (split ? `<b>Use in our experiments:</b> ${split}<br>` : "") + (truth >= 0 ? `<b>Prompted gesture:</b> ${CLASSES[truth]} · per-frame accuracy ${(acc * 100).toFixed(0)}%<br>` : "") +
     `<b>Average inference:</b> ${(times.reduce((a, b) => a + b, 0) / N).toFixed(0)} ms per frame`;
 }
 function timeline(probs) {

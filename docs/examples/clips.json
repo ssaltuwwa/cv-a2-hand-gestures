@@ -1,11 +1,146 @@
 [
- "peace-sign__dark_room__handheld__11.mp4",
- "peace-sign__kitchen__static__03.mp4",
- "peace-sign__night_neon__pan__10.mp4",
- "stop__kitchen__static__04.mp4",
- "stop__plain_wall__handheld__09.mp4",
- "stop__sunny_street__zoom__01.mp4",
- "thumbs-up__classroom__zoom__00.mp4",
- "thumbs-up__night_neon__static__06.mp4",
- "thumbs-up__sunny_street__zoom__05.mp4"
+ {
+  "file": "peace-sign__car__pan__07.mp4",
+  "split": "training"
+ },
+ {
+  "file": "peace-sign__car__zoom__04.mp4",
+  "split": "training"
+ },
+ {
+  "file": "peace-sign__classroom__zoom__05.mp4",
+  "split": "training"
+ },
+ {
+  "file": "peace-sign__dark_room__handheld__11.mp4",
+  "split": "held-out"
+ },
+ {
+  "file": "peace-sign__dark_room__static__01.mp4",
+  "split": "training"
+ },
+ {
+  "file": "peace-sign__dark_room__zoom__08.mp4",
+  "split": "training"
+ },
+ {
+  "file": "peace-sign__kitchen__static__03.mp4",
+  "split": "held-out"
+ },
+ {
+  "file": "peace-sign__night_neon__pan__10.mp4",
+  "split": "held-out"
+ },
+ {
+  "file": "peace-sign__plain_wall__pan__09.mp4",
+  "split": "training"
+ },
+ {
+  "file": "peace-sign__plain_wall__zoom__02.mp4",
+  "split": "training"
+ },
+ {
+  "file": "peace-sign__sunny_street__static__06.mp4",
+  "split": "training"
+ },
+ {
+  "file": "peace-sign__sunny_street__zoom__00.mp4",
+  "split": "training"
+ },
+ {
+  "file": "thumbs-up__car__pan__08.mp4",
+  "split": "training"
+ },
+ {
+  "file": "thumbs-up__car__zoom__10.mp4",
+  "split": "training"
+ },
+ {
+  "file": "thumbs-up__classroom__zoom__00.mp4",
+  "split": "held-out"
+ },
+ {
+  "file": "thumbs-up__dark_room__handheld__03.mp4",
+  "split": "training"
+ },
+ {
+  "file": "thumbs-up__dark_room__pan__01.mp4",
+  "split": "training"
+ },
+ {
+  "file": "thumbs-up__dark_room__static__02.mp4",
+  "split": "training"
+ },
+ {
+  "file": "thumbs-up__night_neon__pan__09.mp4",
+  "split": "training"
+ },
+ {
+  "file": "thumbs-up__night_neon__static__06.mp4",
+  "split": "held-out"
+ },
+ {
+  "file": "thumbs-up__night_neon__zoom__07.mp4",
+  "split": "training"
+ },
+ {
+  "file": "thumbs-up__plain_wall__static__11.mp4",
+  "split": "training"
+ },
+ {
+  "file": "thumbs-up__sunny_street__handheld__04.mp4",
+  "split": "training"
+ },
+ {
+  "file": "thumbs-up__sunny_street__zoom__05.mp4",
+  "split": "held-out"
+ },
+ {
+  "file": "stop__classroom__handheld__00.mp4",
+  "split": "training"
+ },
+ {
+  "file": "stop__classroom__pan__05.mp4",
+  "split": "training"
+ },
+ {
+  "file": "stop__classroom__static__07.mp4",
+  "split": "training"
+ },
+ {
+  "file": "stop__dark_room__static__06.mp4",
+  "split": "training"
+ },
+ {
+  "file": "stop__kitchen__handheld__11.mp4",
+  "split": "training"
+ },
+ {
+  "file": "stop__kitchen__static__04.mp4",
+  "split": "held-out"
+ },
+ {
+  "file": "stop__night_neon__handheld__03.mp4",
+  "split": "training"
+ },
+ {
+  "file": "stop__office__handheld__02.mp4",
+  "split": "training"
+ },
+ {
+  "file": "stop__office__pan__10.mp4",
+  "split": "training"
+ },
+ {
+  "file": "stop__plain_wall__handheld__09.mp4",
+  "split": "held-out"
+ },
+ {
+  "file": "stop__sunny_street__pan__08.mp4",
+  "split": "training"
+ },
+ {
+  "file": "stop__sunny_street__zoom__01.mp4",
+  "split": "held-out"
+ }
 ]
