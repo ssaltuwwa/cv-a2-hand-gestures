@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hand Gesture Recognition</title>
+<meta name="description" content="Peace sign, thumbs-up and stop recognition in the browser, with Grad-CAM, latency, stress tests and labelled synthetic clips. CV Assignment 2, SE-2403.">
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js"></script>
+<style>
+:root{
+  --bg:#f6f5f2;--surface:#ffffff;--ink:#1d1d1b;--muted:#6b6a66;--line:#e2e0da;
+  --accent:#2f5bd3;--accent-soft:#e7edfc;--warn:#b5560b;--warn-soft:#fdf0e3;--good:#1f7a4d;
+  --radius:12px;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141413;--surface:#1e1e1c;--ink:#ecebe7;--muted:#a3a19b;--line:#33322f;
+  --accent:#7d9cf0;--accent-soft:#232c45;--warn:#f0a35e;--warn-soft:#3a2a1a;--good:#5cc28d;}}
+:root[data-theme="dark"]{
+  --bg:#141413;--surface:#1e1e1c;--ink:#ecebe7;--muted:#a3a19b;--line:#33322f;
+  --accent:#7d9cf0;--accent-soft:#232c45;--warn:#f0a35e;--warn-soft:#3a2a1a;--good:#5cc28d;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:24px 16px 64px}
+header h1{font-size:24px;margin:0 0 4px;letter-spacing:-.01em}
+header p{margin:0;color:var(--muted)}
+.status{margin-top:12px;font-size:13px;color:var(--muted)}
+.status b{color:var(--ink)}
+nav{display:flex;gap:4px;flex-wrap:wrap;margin:20px 0 16px;border-bottom:1px solid var(--line)}
+nav button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 12px;margin-bottom:-1px;
+  color:var(--muted);font:inherit;font-weight:600;cursor:pointer}
+nav button[aria-selected="true"]{color:var(--ink);border-color:var(--accent)}
+section[role=tabpanel]{display:none}section.active{display:block}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.card h2{font-size:15px;margin:0 0 12px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:8px 12px;
+  font:inherit;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+.stage{position:relative;background:var(--bg);border:1px dashed var(--line);border-radius:8px;aspect-ratio:1;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--muted);font-size:13px}
+.stage canvas,.stage video,.stage img{width:100%;height:100%;object-fit:contain}
+.synlabel{position:absolute;top:8px;left:8px;background:#000c;color:#ffd84a;font-size:12px;font-weight:700;letter-spacing:.04em;padding:3px 8px;border-radius:4px}
+.mirror{transform:scaleX(-1)}
+.bars{display:grid;gap:8px;margin:4px 0 12px}
+.bar{display:grid;grid-template-columns:96px 1fr 52px;align-items:center;gap:8px;font-size:13px}
+.bar .t{height:10px;background:var(--bg);border-radius:6px;overflow:hidden}
+.bar .f{height:100%;background:var(--muted);width:0;transition:width .2s}
+.bar.top .f{background:var(--accent)}
+.bar .v{text-align:right;font-variant-numeric:tabular-nums}
+.pred{font-size:22px;font-weight:700;margin:0 0 8px}
+.meta{font-size:12.5px;color:var(--muted);line-height:1.6}
+.meta b{color:var(--ink);font-weight:600}
+.note{background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+.gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:760px){.gallery{grid-template-columns:repeat(2,1fr)}}
+.gallery figure{margin:0}.gallery canvas{width:100%;aspect-ratio:1;border-radius:8px;display:block}
+.gallery figcaption{font-size:12px;color:var(--muted);margin-top:4px}
+.gallery figcaption b{color:var(--ink)}
+.wrong b{color:var(--warn)}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums;margin:8px 0 20px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:600}
+.tablewrap{overflow-x:auto}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:4px 10px;cursor:pointer;background:var(--surface);color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;background:var(--warn);color:#fff;
+  border-radius:4px;padding:2px 6px;vertical-align:middle}
+svg.timeline{width:100%;height:auto;display:block}
+footer{margin-top:32px;font-size:12.5px;color:var(--muted)}
+input[type=file]{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Hand gesture recognition: peace · thumbs-up · stop</h1>
+  <p>MobileNetV2 fine-tuned on our own photos. The model runs entirely in your browser: images never leave your device.</p>
+  <div class="status" id="status">Loading model…</div>
+</header>
+
+<nav role="tablist">
+  <button role="tab" aria-selected="true" data-tab="predict">Predict</button>
+  <button role="tab" aria-selected="false" data-tab="live">Live webcam</button>
+  <button role="tab" aria-selected="false" data-tab="stress">Stress test</button>
+  <button role="tab" aria-selected="false" data-tab="synthetic">Synthetic clips</button>
+  <button role="tab" aria-selected="false" data-tab="about">About &amp; ethics</button>
+</nav>
+
+<!-- PREDICT -->
+<section role="tabpanel" id="predict" class="active">
+  <div class="grid">
+    <div class="card">
+      <h2>1. Photo</h2>
+      <div class="btns">
+        <label class="btn primary" for="file">Upload photo</label><input type="file" id="file" accept="image/*">
+        <button class="btn" id="camOn">Use webcam</button>
+        <button class="btn" id="snap" disabled>Take photo</button>
+      </div>
+      <div class="stage" id="inStage">No photo yet</div>
+    </div>
+    <div class="card">
+      <h2>2. Prediction and Grad-CAM</h2>
+      <p class="pred" id="pLabel">–</p>
+      <div class="bars" id="pBars"></div>
+      <div class="stage" id="camStage">The heatmap shows where the model looks</div>
+      <p class="meta" id="pMeta"></p>
+    </div>
+  </div>
+</section>
+
+<!-- LIVE -->
+<section role="tabpanel" id="live">
+  <div class="grid">
+    <div class="card">
+      <h2>Webcam</h2>
+      <div class="btns"><button class="btn primary" id="liveOn">Start</button><button class="btn" id="liveOff" disabled>Stop</button></div>
+      <div class="stage" id="liveStage">Camera is off</div>
+    </div>
+    <div class="card">
+      <h2>Prediction (every frame)</h2>
+      <p class="pred" id="lLabel">–</p>
+      <div class="bars" id="lBars"></div>
+      <p class="meta">Below 60% confidence the app says <b>unsure</b>.</p>
+      <p class="meta" id="lMeta"></p>
+    </div>
+  </div>
+</section>
+
+<!-- STRESS -->
+<section role="tabpanel" id="stress">
+  <div class="card">
+    <h2>Stress-test generator</h2>
+    <p class="meta" style="margin-top:-6px">Simulates difficult environments on your photo and shows how the prediction changes.</p>
+    <div class="btns">
+      <label class="btn primary" for="sFile">Upload photo</label><input type="file" id="sFile" accept="image/*">
+      <button class="btn" id="sUseLast" disabled>Use photo from Predict</button>
+    </div>
+    <div class="chips" id="sChips"></div>
+    <div class="gallery" id="sGallery"></div>
+    <p class="meta" id="sMeta"></p>
+  </div>
+</section>
+
+<!-- SYNTHETIC -->
+<section role="tabpanel" id="synthetic">
+  <div class="card">
+    <h2>Synthetic clips <span class="badge">SYNTHETIC</span></h2>
+    <div class="note">All clips here are AI-generated with a text-to-video model (Wan2.1-T2V-1.3B, following the Step-Video-T2V idea). They show no real people. These clips were never used for training: they are a held-out stress test.</div>
+    <div class="chips" id="cChips"></div>
+    <div class="grid">
+      <div class="stage" id="cStage">Choose a clip</div>
+      <div>
+        <p class="pred" id="cLabel">–</p>
+        <div id="cPlot"></div>
+        <p class="meta" id="cMeta"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ABOUT -->
+<section role="tabpanel" id="about">
+  <div class="card">
+    <h2>Privacy, consent and synthetic media</h2>
+    <p><b>Privacy.</b> The model runs in your browser with ONNX Runtime Web. Photos and webcam frames are processed on your device and are never uploaded or stored.</p>
+    <p><b>Consent.</b> All people in our training photos are team members who agreed to be photographed for this course project.</p>
+    <p><b>Synthetic media.</b> Clips in the Synthetic clips tab are AI-generated and labelled SYNTHETIC on every frame.</p>
+    <p><b>Limitations.</b> Trained on 644 photos of three people's hands, mostly indoors. Accuracy drops for unusual poses, backlight and very low resolution (see the stress test). Not for safety-critical or surveillance use.</p>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h2>Results from our experiments</h2>
+    <div class="tablewrap" id="results">Loading…</div>
+  </div>
+</section>
+
+<footer>Computer Vision, Assignment 2 · SE-2403 · Aruzhan Rysbayeva, Alzira Kuanyshbekova, Saltanat Sergeyeva</footer>
+</div>
+
+<script>
+"use strict";
+const CLASSES = ["peace-sign", "thumbs-up", "stop"];
+const CONDITIONS = ["clean","dark","overexposed","motion_blur","noise","low_res","rotated","occlusion"];
+const S = 224;
+const $ = id => document.getElementById(id);
+let session = null, head = null, lastSource = null;
+const latHist = [];
+
+/* ---------- environment ---------- */
+function envText() {
+  const ua = navigator.userAgent;
+  const br = /Edg\//.test(ua) ? "Edge" : /OPR\//.test(ua) ? "Opera" : /Chrome\//.test(ua) ? "Chrome" :
+             /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "unknown browser";
+  const os = /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Windows/.test(ua) ? "Windows" :
+             /Mac OS/.test(ua) ? "macOS" : /Linux/.test(ua) ? "Linux" : "unknown OS";
+  const mobile = /Mobi|Android|iPhone|iPad/.test(ua) ? "mobile" : "desktop";
+  return `${br} on ${os} (${mobile}, ${navigator.hardwareConcurrency || "?"} CPU threads) · ONNX Runtime Web, WASM backend`;
+}
+function latText(ms) {
+  latHist.push(ms); if (latHist.length > 200) latHist.shift();
+  const avg = latHist.reduce((a, b) => a + b, 0) / latHist.length;
+  return `<b>Inference:</b> ${ms.toFixed(0)} ms · session average ${avg.toFixed(0)} ms over ${latHist.length} runs<br><b>Device:</b> ${envText()}`;
+}
+
+/* ---------- model ---------- */
+async function loadModel() {
+  ort.env.wasm.numThreads = 1;
+  ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/";
+  head = await (await fetch("model/head.json")).json();
+  session = await ort.InferenceSession.create("model/gesture.onnx", { executionProviders: ["wasm"] });
+  await run(new Float32Array(S * S * 3));         // warm-up
+  $("status").innerHTML = `Model ready · <b>${envText()}</b>`;
+}
+function toTensor(canvas) {
+  const d = canvas.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, S, S).data;
+  const x = new Float32Array(S * S * 3);
+  for (let i = 0, j = 0; i < d.length; i += 4) { x[j++] = d[i] / 255; x[j++] = d[i + 1] / 255; x[j++] = d[i + 2] / 255; }
+  return x;
+}
+async function run(x) {
+  const t0 = performance.now();
+  const out = await session.run({ image: new ort.Tensor("float32", x, [1, S, S, 3]) });
+  const ms = performance.now() - t0;
+  return { probs: Array.from(out.probs.data), feats: out.features.data, ms };
+}
+function squash(src, w, h) {                 // resize the whole image to 224x224, as in training
+  const c = document.createElement("canvas"); c.width = S; c.height = S;
+  const g = c.getContext("2d"); g.imageSmoothingQuality = "high"; g.drawImage(src, 0, 0, w, h, 0, 0, S, S);
+  return c;
+}
+
+/* ---------- Grad-CAM (exact for GAP + dense head: gradient = W[:,c] / 49) ---------- */
+function camCanvas(feats, cls, base) {
+  const K = 1280, n = 7, cam = new Float32Array(n * n);
+  for (let p = 0; p < n * n; p++) { let s = 0; for (let k = 0; k < K; k++) s += feats[p * K + k] * head.W[k][cls]; cam[p] = Math.max(0, s); }
+  let mn = Infinity, mx = -Infinity; for (const v of cam) { mn = Math.min(mn, v); mx = Math.max(mx, v); }
+  const small = document.createElement("canvas"); small.width = n; small.height = n;
+  const sg = small.getContext("2d"), img = sg.createImageData(n, n);
+  for (let p = 0; p < n * n; p++) {
+    const v = (cam[p] - mn) / (mx - mn + 1e-8), [r, g, b] = jet(v);
+    img.data.set([r, g, b, 255], p * 4);
+  }
+  sg.putImageData(img, 0, 0);
+  const c = document.createElement("canvas"); c.width = S; c.height = S;
+  const g = c.getContext("2d"); g.drawImage(base, 0, 0);
+  g.globalAlpha = 0.45; g.imageSmoothingEnabled = true; g.drawImage(small, 0, 0, S, S); g.globalAlpha = 1;
+  return c;
+}
+function jet(v) {
+  const r = Math.min(1, Math.max(0, 1.5 - Math.abs(4 * v - 3))), g = Math.min(1, Math.max(0, 1.5 - Math.abs(4 * v - 2))),
+        b = Math.min(1, Math.max(0, 1.5 - Math.abs(4 * v - 1)));
+  return [r * 255, g * 255, b * 255];
+}
+
+/* ---------- UI helpers ---------- */
+function bars(el, probs) {
+  const top = probs.indexOf(Math.max(...probs));
+  el.innerHTML = CLASSES.map((c, i) => `<div class="bar ${i === top ? "top" : ""}"><span>${c}</span>
+    <div class="t"><div class="f" style="width:${(probs[i] * 100).toFixed(1)}%"></div></div>
+    <span class="v">${(probs[i] * 100).toFixed(0)}%</span></div>`).join("");
+}
+function place(stageId, node) { const s = $(stageId); s.innerHTML = ""; s.appendChild(node); }
+async function fileToBitmap(f) { return await createImageBitmap(f, { imageOrientation: "from-image" }); }
+
+/* ---------- tabs ---------- */
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll("section[role=tabpanel]").forEach(s => s.classList.toggle("active", s.id === b.dataset.tab));
+  if (b.dataset.tab !== "live") stopLive();
+});
+
+/* ---------- Predict tab ---------- */
+let camStream = null;
+async function predictFrom(src, w, h) {
+  if (!session) return;
+  const c = squash(src, w, h); lastSource = c; $("sUseLast").disabled = false;
+  const shown = document.createElement("canvas"); shown.width = S; shown.height = S; shown.getContext("2d").drawImage(c, 0, 0);
+  place("inStage", shown);
+  const r = await run(toTensor(c)), k = r.probs.indexOf(Math.max(...r.probs));
+  $("pLabel").textContent = `${CLASSES[k]} · ${(r.probs[k] * 100).toFixed(0)}%`;
+  bars($("pBars"), r.probs);
+  const t0 = performance.now(); const cam = camCanvas(r.feats, k, c); const camMs = performance.now() - t0;
+  place("camStage", cam);
+  $("pMeta").innerHTML = latText(r.ms) + `<br><b>Grad-CAM:</b> ${camMs.toFixed(0)} ms extra`;
+}
+$("file").onchange = async e => { const f = e.target.files[0]; if (!f) return; stopCam(); const b = await fileToBitmap(f); predictFrom(b, b.width, b.height); };
+$("camOn").onclick = async () => {
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+    const v = document.createElement("video"); v.autoplay = true; v.playsInline = true; v.muted = true; v.className = "mirror";
+    v.srcObject = camStream; place("inStage", v); $("snap").disabled = false;
+  } catch (err) { $("inStage").textContent = "Camera not available: " + err.message; }
+};
+$("snap").onclick = () => { const v = $("inStage").querySelector("video"); if (v) predictFrom(v, v.videoWidth, v.videoHeight).then(stopCam); };
+function stopCam() { if (camStream) camStream.getTracks().forEach(t => t.stop()); camStream = null; $("snap").disabled = true; }
+
+/* ---------- Live tab ---------- */
+let liveStream = null, liveOn = false;
+$("liveOn").onclick = async () => {
+  try {
+    liveStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+    const v = document.createElement("video"); v.autoplay = true; v.playsInline = true; v.muted = true; v.className = "mirror";
+    v.srcObject = liveStream; place("liveStage", v); liveOn = true; $("liveOn").disabled = true; $("liveOff").disabled = false;
+    v.onloadeddata = loop;
+    async function loop() {
+      if (!liveOn) return;
+      const r = await run(toTensor(squash(v, v.videoWidth, v.videoHeight))), k = r.probs.indexOf(Math.max(...r.probs));
+      $("lLabel").textContent = r.probs[k] >= 0.6 ? `${CLASSES[k]} · ${(r.probs[k] * 100).toFixed(0)}%` : "unsure";
+      bars($("lBars"), r.probs); $("lMeta").innerHTML = latText(r.ms);
+      setTimeout(loop, 150);
+    }
+  } catch (err) { $("liveStage").textContent = "Camera not available: " + err.message; }
+};
+$("liveOff").onclick = stopLive;
+function stopLive() {
+  liveOn = false; if (liveStream) liveStream.getTracks().forEach(t => t.stop()); liveStream = null;
+  $("liveOn").disabled = false; $("liveOff").disabled = true;
+}
+
+/* ---------- Stress test (same conditions as the notebook) ---------- */
+const selected = new Set(CONDITIONS);
+$("sChips").innerHTML = CONDITIONS.map(c => `<button class="chip" aria-pressed="true" data-c="${c}">${c.replace("_", " ")}</button>`).join("");
+$("sChips").querySelectorAll(".chip").forEach(ch => ch.onclick = () => {
+  const c = ch.dataset.c, on = ch.getAttribute("aria-pressed") !== "true";
+  ch.setAttribute("aria-pressed", on); on ? selected.add(c) : selected.delete(c); if (lastStress) stress(lastStress);
+});
+function rng(seed) { return () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296); }
+function perturb(c, cond) {
+  const o = document.createElement("canvas"); o.width = S; o.height = S; const g = o.getContext("2d");
+  if (cond === "rotated") { g.translate(S / 2, S / 2); g.rotate(-25 * Math.PI / 180); g.drawImage(c, -S / 2, -S / 2);
+    g.setTransform(1, 0, 0, 1, 0, 0); return o; }
+  if (cond === "low_res") { const t = document.createElement("canvas"); t.width = S / 4; t.height = S / 4;
+    t.getContext("2d").drawImage(c, 0, 0, S / 4, S / 4); g.imageSmoothingEnabled = false; g.drawImage(t, 0, 0, S, S); return o; }
+  g.drawImage(c, 0, 0);
+  const im = g.getImageData(0, 0, S, S), d = im.data, src = new Uint8ClampedArray(d), r = rng(7);
+  if (cond === "occlusion") { const ph = Math.floor(S * .3), x0 = Math.floor(r() * (S - ph)), y0 = Math.floor(r() * (S - ph));
+    for (let y = y0; y < y0 + ph; y++) for (let x = x0; x < x0 + ph; x++) { const i = (y * S + x) * 4; d[i] = d[i + 1] = d[i + 2] = 0; } }
+  for (let i = 0; i < d.length; i += 4) for (let ch = 0; ch < 3; ch++) {
+    let v = d[i + ch] / 255;
+    if (cond === "dark") v = Math.pow(v, 1.8) * 0.45;
+    else if (cond === "overexposed") v = v * 1.7 + 0.15;
+    else if (cond === "noise") { const u = Math.max(r(), 1e-9), w = r(); v += 0.08 * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * w); }
+    else if (cond === "motion_blur") { const x = (i / 4) % S, y = Math.floor(i / 4 / S); let s = 0;
+      for (let k = -7; k <= 7; k++) { const xx = Math.min(S - 1, Math.max(0, x + k)); s += src[(y * S + xx) * 4 + ch]; } v = s / 15 / 255; }
+    d[i + ch] = Math.min(255, Math.max(0, v * 255));
+  }
+  g.putImageData(im, 0, 0); return o;
+}
+let lastStress = null;
+async function stress(c) {
+  if (!session) return; lastStress = c; const out = [], times = [];
+  for (const cond of CONDITIONS.filter(x => selected.has(x))) {
+    const p = perturb(c, cond), r = await run(toTensor(p)), k = r.probs.indexOf(Math.max(...r.probs)); times.push(r.ms);
+    out.push({ cond, p, k, conf: r.probs[k] });
+  }
+  const ref = out.find(o => o.cond === "clean");
+  $("sGallery").innerHTML = "";
+  for (const o of out) {
+    const f = document.createElement("figure"), cap = document.createElement("figcaption");
+    cap.className = ref && o.k !== ref.k ? "wrong" : "";
+    cap.innerHTML = `${o.cond.replace("_", " ")}: <b>${CLASSES[o.k]}</b> ${(o.conf * 100).toFixed(0)}%`;
+    f.append(o.p, cap); $("sGallery").appendChild(f);
+  }
+  const avg = times.reduce((a, b) => a + b, 0) / Math.max(1, times.length);
+  $("sMeta").innerHTML = `Predictions that differ from the clean photo are shown in orange. Average inference ${avg.toFixed(0)} ms per image.`;
+}
+$("sFile").onchange = async e => { const f = e.target.files[0]; if (!f) return; const b = await fileToBitmap(f); stress(squash(b, b.width, b.height)); };
+$("sUseLast").onclick = () => lastSource && stress(lastSource);
+
+/* ---------- Synthetic clips ---------- */
+async function loadClips() {
+  let clips = [];
+  try { clips = await (await fetch("examples/clips.json")).json(); } catch (e) {}
+  if (!clips.length) { $("cChips").innerHTML = '<span class="meta">No clips found in examples/.</span>'; return; }
+  $("cChips").innerHTML = clips.map(c => `<button class="chip" aria-pressed="false" data-f="${c}">${c.replace(".mp4", "").replaceAll("__", " · ")}</button>`).join("");
+  $("cChips").querySelectorAll(".chip").forEach(ch => ch.onclick = () => {
+    $("cChips").querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", x === ch)); clip(ch.dataset.f);
+  });
+}
+async function clip(name) {
+  const v = document.createElement("video"); v.src = "examples/" + name; v.muted = true; v.playsInline = true; v.loop = true;
+  place("cStage", v); $("cStage").insertAdjacentHTML("beforeend", '<span class="synlabel">SYNTHETIC · AI-generated</span>');
+  await new Promise(r => v.onloadedmetadata = r);
+  const N = 16, probs = [], times = [];
+  $("cLabel").textContent = "Analysing frames…";
+  for (let i = 0; i < N; i++) {
+    v.currentTime = (i + 0.5) / N * v.duration; await new Promise(r => v.onseeked = r);
+    const r = await run(toTensor(squash(v, v.videoWidth, v.videoHeight))); probs.push(r.probs); times.push(r.ms);
+  }
+  v.play();
+  const votes = probs.map(p => p.indexOf(Math.max(...p))), counts = CLASSES.map((_, i) => votes.filter(x => x === i).length);
+  const maj = counts.indexOf(Math.max(...counts)), truth = CLASSES.findIndex(c => name.startsWith(c + "__"));
+  $("cLabel").textContent = `Majority vote: ${CLASSES[maj]} (${counts[maj]}/${N} frames)`;
+  $("cPlot").innerHTML = timeline(probs);
+  const acc = truth >= 0 ? votes.filter(x => x === truth).length / N : null;
+  $("cMeta").innerHTML = (truth >= 0 ? `<b>Prompted gesture:</b> ${CLASSES[truth]} · per-frame accuracy ${(acc * 100).toFixed(0)}%<br>` : "") +
+    `<b>Average inference:</b> ${(times.reduce((a, b) => a + b, 0) / N).toFixed(0)} ms per frame`;
+}
+function timeline(probs) {
+  const W = 480, H = 170, L = 34, R = 10, T = 12, B = 28, n = probs.length, cols = ["var(--accent)", "var(--good)", "var(--warn)"];
+  const x = i => L + i * (W - L - R) / (n - 1), y = v => T + (1 - v) * (H - T - B);
+  let s = `<svg class="timeline" viewBox="0 0 ${W} ${H}" role="img" aria-label="Per-frame probabilities">`;
+  for (const v of [0, .5, 1]) s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(v) + 4}" font-size="11" text-anchor="end" fill="var(--muted)">${v}</text>`;
+  CLASSES.forEach((c, k) => {
+    s += `<polyline fill="none" stroke="${cols[k]}" stroke-width="2" points="${probs.map((p, i) => `${x(i)},${y(p[k])}`).join(" ")}"/>`;
+    s += `<text x="${L + 4 + k * 110}" y="${H - 6}" font-size="11.5" fill="${cols[k]}" font-weight="600">${c}</text>`;
+  });
+  return s + `<text x="${W - R}" y="${H - 6}" font-size="11" text-anchor="end" fill="var(--muted)">frame →</text></svg>`;
+}
+
+/* ---------- results table ---------- */
+async function loadResults() {
+  try {
+    const md = await (await fetch("results.md")).text(); let html = "", rows = [];
+    const flush = () => { if (!rows.length) return; const [h, , ...b] = rows;
+      html += `<table><thead><tr>${h.map(c => `<th>${c}</th>`).join("")}</tr></thead><tbody>${b.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`; rows = []; };
+    for (const line of md.split("\n")) {
+      if (line.startsWith("|")) rows.push(line.split("|").slice(1, -1).map(s => s.trim()));
+      else { flush(); if (line.startsWith("## ")) html += `<h2>${line.slice(3)}</h2>`; else if (line.trim()) html += `<p class="meta">${line}</p>`; }
+    }
+    flush(); $("results").innerHTML = html;
+  } catch (e) { $("results").textContent = "results.md not found."; }
+}
+
+loadModel().catch(e => $("status").textContent = "Could not load the model: " + e.message);
+loadClips(); loadResults();
+</script>
+</body>
+</html>
